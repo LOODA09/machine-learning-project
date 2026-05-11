@@ -217,7 +217,7 @@ logistic_predictor = LogisticRegression(max_iter=1000, random_state=42)
 all_metrics["Logistic Regression"], logistic_predictor = evaluate_with_cv(
     logistic_predictor, "Logistic Regression", train_features, train_labels, test_features, test_labels)
 
-forest_predictor = RandomForestClassifier(n_estimators=300, max_depth=25, min_samples_split=5, class_weight='balanced', random_state=42, n_jobs=-1)
+forest_predictor = RandomForestClassifier(n_estimators=100, max_depth=15, min_samples_split=5, class_weight='balanced', random_state=42, n_jobs=-1)
 all_metrics["Random Forest"], forest_predictor = evaluate_with_cv(
     forest_predictor, "Random Forest", train_features, train_labels, test_features, test_labels)
 
@@ -319,7 +319,7 @@ save_model(lstm_model, "lstm_model.h5")
 # ============================================================
 print("\nComputing SHAP values for Random Forest...")
 explainer = shap.TreeExplainer(forest_predictor)
-sample_X = test_features.sample(min(500, test_features.shape[0]), random_state=42)
+sample_X = test_features.sample(min(50, test_features.shape[0]), random_state=42)
 shap_values = explainer.shap_values(sample_X)
 with open("shap_data.pkl", "wb") as f:
     pickle.dump({"explainer": explainer, "shap_values": shap_values, "sample_X": sample_X}, f)

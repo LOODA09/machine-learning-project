@@ -105,6 +105,11 @@ def load_artifacts():
     all_models = {**sk_models, "ann": ann, "lstm": lstm, "rnn": rnn}
     return all_models, scaler, config, metrics
 
+@st.cache_resource
+def load_shap_data():
+    with open("shap_data.pkl", "rb") as f:
+        return pickle.load(f)
+
 try:
     loaded_models, loaded_scaler, model_config, all_metrics = load_artifacts()
     feature_names = model_config["feature_names"]
@@ -293,8 +298,7 @@ elif page == "🔍 SHAP Explainer":
     st.markdown("<div class='main-header'><h1>Feature Importance (SHAP)</h1><p>Explainable AI for Random Forest Predictions</p></div>", unsafe_allow_html=True)
     
     try:
-        with open("shap_data.pkl", "rb") as f:
-            shap_data = pickle.load(f)
+        shap_data = load_shap_data()
         
         shap_values = shap_data["shap_values"]
         sample_X = shap_data["sample_X"]
