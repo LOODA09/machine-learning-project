@@ -3,7 +3,7 @@ pandas
 scikit-learn
 imbalanced-learn
 xgboost
-tensorflow
+tensorflow-cpu
 seaborn
 matplotlib
 scipy
@@ -12,4 +12,3 @@ shap
 plotly
 streamlit-lottie
 joblib
-pickle-mixin
