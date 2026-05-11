@@ -68,15 +68,19 @@ def get_data():
         return _cache
     
     try:
+        # 1. Load Models (Skip TF)
         raw_models = safe_pickle_load("model.pkl")
         sk_models = {k: v for k, v in raw_models.items() if hasattr(v, 'predict') and hasattr(v, 'fit')}
         
+        # 2. Load Scaler
         with open("scaler.pkl", "rb") as f:
             scaler = pickle.load(f)
             
+        # 3. Load Config
         with open("model_config.pkl", "rb") as f:
             config = pickle.load(f)
             
+        # 4. Load Metrics
         with open("training_metrics.pkl", "rb") as f:
             metrics = pickle.load(f)
             
