@@ -1,14 +1,9 @@
-numpy
+numpy<2.0.0
 pandas
 scikit-learn
-imbalanced-learn
 xgboost
 tensorflow-cpu
-seaborn
-matplotlib
-scipy
-streamlit
 shap
 plotly
+streamlit
 streamlit-lottie
-joblib
