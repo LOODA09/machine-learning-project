@@ -6,10 +6,25 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ============================================================
+# SAFE UNPICKLER - Skips missing TF objects in pkl files
+# ============================================================
+class SafeUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        try:
+            return super().find_class(module, name)
+        except (ModuleNotFoundError, AttributeError):
+            # Return a dummy placeholder for missing classes (e.g. TensorFlow)
+            return type(name, (), {"__reduce__": lambda self: (type(self), ())})
+
+def safe_pickle_load(filepath):
+    with open(filepath, "rb") as f:
+        return SafeUnpickler(f).load()
+
+# ============================================================
 # PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="Hotel Cancellation Predictor Pro",
+    page_title="Hotel Predictor Pro",
     page_icon="🏨",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -28,220 +43,103 @@ st.markdown("""
         font-weight: 800;
     }
     .main-header p { color: #888; font-size: 1.1rem; }
-
-    .crossing-lines-bg {
-        position: relative; overflow: hidden;
-        padding: 20px 0; border-radius: 12px;
-    }
+    .crossing-lines-bg { position: relative; overflow: hidden; padding: 20px 0; border-radius: 12px; }
     .crossing-lines-bg::before, .crossing-lines-bg::after {
-        content: ''; position: absolute; top: 50%; left: 50%;
-        width: 300%; height: 2px;
+        content: ''; position: absolute; top: 50%; left: 50%; width: 300%; height: 2px;
         background: linear-gradient(90deg, transparent, rgba(102,126,234,0.3), transparent);
         animation: crossLine1 8s linear infinite; pointer-events: none;
     }
     .crossing-lines-bg::before { transform: translate(-50%, -50%) rotate(-30deg); }
-    .crossing-lines-bg::after {
-        transform: translate(-50%, -50%) rotate(30deg);
-        animation: crossLine2 8s linear infinite;
-        background: linear-gradient(90deg, transparent, rgba(118,75,162,0.3), transparent);
-    }
-    @keyframes crossLine1 {
-        0% { transform: translate(-50%, -50%) rotate(-30deg) translateX(-50%); }
-        100% { transform: translate(-50%, -50%) rotate(-30deg) translateX(50%); }
-    }
-    @keyframes crossLine2 {
-        0% { transform: translate(-50%, -50%) rotate(30deg) translateX(50%); }
-        100% { transform: translate(-50%, -50%) rotate(30deg) translateX(-50%); }
-    }
-
+    .crossing-lines-bg::after { transform: translate(-50%, -50%) rotate(30deg); animation: crossLine2 8s linear infinite; background: linear-gradient(90deg, transparent, rgba(118,75,162,0.3), transparent); }
+    @keyframes crossLine1 { 0% { transform: translate(-50%, -50%) rotate(-30deg) translateX(-50%); } 100% { transform: translate(-50%, -50%) rotate(-30deg) translateX(50%); } }
+    @keyframes crossLine2 { 0% { transform: translate(-50%, -50%) rotate(30deg) translateX(50%); } 100% { transform: translate(-50%, -50%) rotate(30deg) translateX(-50%); } }
     .model-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px; padding: 20px; margin: 10px 0;
-        position: relative; overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        backdrop-filter: blur(10px);
+        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px; padding: 20px; margin: 10px 0; position: relative; overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease; backdrop-filter: blur(10px);
     }
-    .model-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 30px rgba(102,126,234,0.3);
-    }
+    .model-card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(102,126,234,0.3); }
     .model-card::before {
-        content: ''; position: absolute; top: -50%; left: -50%;
-        width: 200%; height: 200%;
+        content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
         background: conic-gradient(transparent, rgba(102,126,234,0.2), transparent 30%);
         animation: cardSpin 5s linear infinite; pointer-events: none;
     }
     @keyframes cardSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .card-content { position: relative; z-index: 1; }
-
     .feature-card {
         background: linear-gradient(135deg, rgba(102,126,234,0.05), rgba(118,75,162,0.05));
-        border: 1px solid rgba(102,126,234,0.2);
-        border-radius: 12px; padding: 15px; margin-bottom: 15px;
+        border: 1px solid rgba(102,126,234,0.2); border-radius: 12px; padding: 15px; margin-bottom: 15px;
         position: relative; overflow: hidden;
     }
-    .feature-card::after {
-        content: ''; position: absolute; top: 0; right: 0;
-        width: 60px; height: 60px;
-        background: linear-gradient(135deg, rgba(102,126,234,0.1), transparent);
-        border-radius: 0 12px 0 60px;
-    }
-    .feature-label {
-        font-weight: 600; color: #667eea; font-size: 0.95rem;
-        margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
-    }
-
+    .feature-card::after { content: ''; position: absolute; top: 0; right: 0; width: 60px; height: 60px; background: linear-gradient(135deg, rgba(102,126,234,0.1), transparent); border-radius: 0 12px 0 60px; }
+    .feature-label { font-weight: 600; color: #667eea; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
     .result-box {
         background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        border-radius: 16px; padding: 30px; text-align: center;
-        color: white; margin: 20px 0; position: relative; overflow: hidden;
-        box-shadow: 0 10px 30px rgba(17,153,142,0.3);
+        border-radius: 16px; padding: 30px; text-align: center; color: white; margin: 20px 0;
+        position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(17,153,142,0.3);
     }
-    .result-box.canceled {
-        background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%);
-        box-shadow: 0 10px 30px rgba(203,45,62,0.3);
-    }
+    .result-box.canceled { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); box-shadow: 0 10px 30px rgba(203,45,62,0.3); }
     .result-icon { font-size: 3.5rem; position: relative; z-index: 1; }
-    .result-text {
-        font-size: 1.8rem; font-weight: 800;
-        margin-top: 10px; position: relative; z-index: 1;
-    }
+    .result-text { font-size: 1.8rem; font-weight: 800; margin-top: 10px; position: relative; z-index: 1; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# LOAD ARTIFACTS (with safe TensorFlow import)
+# LOAD ARTIFACTS
 # ============================================================
 @st.cache_resource
 def load_artifacts():
-    """Load all models and preprocessing artifacts safely."""
-    with open("model.pkl", "rb") as f:
-        sk_models = pickle.load(f)
+    # Load models and filter out dummy TF placeholders
+    raw_models = safe_pickle_load("model.pkl")
+    sk_models = {k: v for k, v in raw_models.items() if hasattr(v, 'predict') and hasattr(v, 'fit')}
+    
     with open("scaler.pkl", "rb") as f:
         scaler = pickle.load(f)
     with open("model_config.pkl", "rb") as f:
         config = pickle.load(f)
     with open("training_metrics.pkl", "rb") as f:
         metrics = pickle.load(f)
-
-    dl_models = {}
-    dl_errors = []
-
-    # Try loading deep learning models one by one
-    for model_name, filename in [("ann", "ann_model.h5"), ("lstm", "lstm_model.h5"), ("rnn", "rnn_model.h5")]:
-        try:
-            import tensorflow as tf
-            tf.get_logger().setLevel('ERROR')
-            dl_models[model_name] = tf.keras.models.load_model(filename, compile=False)
-        except Exception as e:
-            dl_errors.append(f"{model_name}: {str(e)[:80]}")
-
-    all_models = {**sk_models, **dl_models}
-    return all_models, scaler, config, metrics, dl_errors
-
+    return sk_models, scaler, config, metrics
 
 @st.cache_resource
 def load_shap_data():
-    """Load pre-computed SHAP values."""
     with open("shap_data.pkl", "rb") as f:
         return pickle.load(f)
 
-
-# Attempt to load everything
 try:
-    loaded_models, loaded_scaler, model_config, all_metrics, dl_load_errors = load_artifacts()
+    loaded_models, loaded_scaler, model_config, all_metrics = load_artifacts()
     feature_names = model_config["feature_names"]
-    LOAD_SUCCESS = True
 except FileNotFoundError as e:
     st.error(f"Missing file: {e}")
-    LOAD_SUCCESS = False
     st.stop()
 except Exception as e:
     st.error(f"Error loading artifacts: {e}")
-    LOAD_SUCCESS = False
     st.stop()
 
-# Show warnings for any DL models that failed to load
-if dl_load_errors:
-    with st.sidebar:
-        st.warning("Some deep learning models could not be loaded:")
-        for err in dl_load_errors:
-            st.write(f"• {err}")
-        st.info("Prediction will use available sklearn models only.")
-
 # ============================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # ============================================================
 st.sidebar.title("🏨 Navigation")
-page = st.sidebar.radio(
-    "Select Analysis Module",
-    [
-        "🏠 Prediction Studio",
-        "📊 Model Comparison",
-        "🔍 SHAP Explainer",
-        "👥 Guest Segments"
-    ]
-)
+page = st.sidebar.radio("Select Analysis Module", [
+    "🏠 Prediction Studio", "📊 Model Comparison", "🔍 SHAP Explainer", "👥 Guest Segments"
+])
 
-# ============================================================
-# HELPER: Prediction Functions
-# ============================================================
 SKLEARN_MODEL_MAP = [
-    ("Random Forest ⭐", "random_forest"),
-    ("XGBoost", "xgboost"),
-    ("Logistic Reg", "logistic_regression"),
-    ("KNN", "knn"),
-    ("SVM", "svm"),
-    ("Decision Tree", "decision_tree"),
-]
-
-DL_MODEL_MAP = [
-    ("ANN", "ann"),
-    ("LSTM", "lstm"),
-    ("RNN", "rnn"),
+    ("Random Forest ⭐", "random_forest"), ("XGBoost", "xgboost"),
+    ("Logistic Reg", "logistic_regression"), ("KNN", "knn"),
+    ("SVM", "svm"), ("Decision Tree", "decision_tree"),
 ]
 
 def predict_sklearn(input_df, models):
-    """Run prediction on all available sklearn models."""
     results = []
     for display_name, key in SKLEARN_MODEL_MAP:
-        if key not in models:
-            continue
+        if key not in models: continue
         model = models[key]
         try:
             pred = model.predict(input_df)[0]
             prob = model.predict_proba(input_df)[0][1] if hasattr(model, "predict_proba") else 0.5
-            results.append({
-                "Model": display_name,
-                "Prob": float(prob),
-                "Outcome": "Not Canceled" if pred == 1 else "Canceled"
-            })
-        except Exception as e:
-            results.append({"Model": display_name, "Prob": 0.0, "Outcome": "Error"})
-    return results
-
-def predict_dl(input_df, models):
-    """Run prediction on all available deep learning models."""
-    results = []
-    input_keras = input_df.astype(np.float32)
-    rnn_input = input_keras.values.reshape(-1, 1, input_keras.shape[1])
-
-    for display_name, key in DL_MODEL_MAP:
-        if key not in models:
-            continue
-        model = models[key]
-        try:
-            if key == "ann":
-                prob = float(model.predict(input_keras, verbose=0)[0][0])
-            else:
-                prob = float(model.predict(rnn_input, verbose=0)[0][0])
-            results.append({
-                "Model": display_name,
-                "Prob": prob,
-                "Outcome": "Not Canceled" if prob > 0.5 else "Canceled"
-            })
-        except Exception as e:
+            results.append({"Model": display_name, "Prob": float(prob), "Outcome": "Not Canceled" if pred == 1 else "Canceled"})
+        except:
             results.append({"Model": display_name, "Prob": 0.0, "Outcome": "Error"})
     return results
 
@@ -249,16 +147,10 @@ def predict_dl(input_df, models):
 # PAGE 1: PREDICTION STUDIO
 # ============================================================
 if page == "🏠 Prediction Studio":
-    st.markdown("""
-    <div class="main-header">
-        <h1>Hotel Cancellation Predictor</h1>
-        <p>Real-time booking outcome prediction powered by advanced ML models</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown("""<div class="main-header"><h1>Hotel Cancellation Predictor</h1><p>Real-time booking outcome prediction powered by advanced ML models</p></div>""", unsafe_allow_html=True)
     st.markdown("### Booking Details")
     st.markdown("---")
-    
+
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         st.markdown("<div class='feature-card'><div class='feature-label'>🅿️ Parking</div></div>", unsafe_allow_html=True)
@@ -269,14 +161,8 @@ if page == "🏠 Prediction Studio":
     with col_c:
         st.markdown("<div class='feature-card'><div class='feature-label'>📅 Lead Time</div></div>", unsafe_allow_html=True)
         advance_days = st.number_input("Days Before Arrival", min_value=0, max_value=500, value=30)
-    
-    booking_advance = (
-        0 if advance_days <= 1 else
-        1 if advance_days <= 7 else
-        2 if advance_days <= 30 else
-        3 if advance_days <= 365 else
-        4
-    )
+
+    booking_advance = 0 if advance_days <= 1 else (1 if advance_days <= 7 else (2 if advance_days <= 30 else (3 if advance_days <= 365 else 4)))
 
     col_d, col_e = st.columns(2)
     with col_d:
@@ -315,57 +201,33 @@ if page == "🏠 Prediction Studio":
         st.markdown("<div class='feature-card'><div class='feature-label'>👥 Guest Count</div></div>", unsafe_allow_html=True)
         guest_choice = st.selectbox("Total Guests", ["1", "2", "3", "4", "5", "Group"])
 
-    # Build Vector
     encoded_vector = []
     for meal in ["Meal Plan 2", "Meal Plan 3", "Not Selected"]: encoded_vector.append(1 if dining_choice == meal else 0)
     for room in ["Room_Type 2", "Room_Type 3", "Room_Type 4", "Room_Type 5", "Room_Type 6", "Room_Type 7"]: encoded_vector.append(1 if room_choice == room else 0)
     for segment in ["Complementary", "Corporate", "Offline", "Online"]: encoded_vector.append(1 if channel_choice == segment else 0)
     for guest_cat in ["2", "3", "4", "5", "Group"]: encoded_vector.append(1 if guest_choice == guest_cat else 0)
 
-    feature_row = [
-        1 if parking_availability else 0,
-        booking_advance, room_rate, guest_requests, stay_duration,
-        arrival_day, cancel_history, 1 if new_guest_flag else 0
-    ] + encoded_vector
-    
+    feature_row = [1 if parking_availability else 0, booking_advance, room_rate, guest_requests, stay_duration, arrival_day, cancel_history, 1 if new_guest_flag else 0] + encoded_vector
     input_dataframe = pd.DataFrame([feature_row], columns=feature_names)
     input_dataframe["average_price"] = loaded_scaler.transform(input_dataframe[["average_price"]])
 
     st.markdown("<div class='crossing-lines-bg'>", unsafe_allow_html=True)
     if st.button("🔮 Predict Booking Status", type="primary", use_container_width=True):
         st.markdown("### Ensemble Prediction Results")
-        
-        # Sklearn predictions
         results = predict_sklearn(input_dataframe, loaded_models)
-        # Deep learning predictions
-        results.extend(predict_dl(input_dataframe, loaded_models))
-
         if not results:
-            st.error("No models are available for prediction.")
+            st.error("No models available.")
         else:
-            # Majority Vote
-            valid_results = [r for r in results if r["Outcome"] in ("Not Canceled", "Canceled")]
-            not_canceled = sum(1 for r in valid_results if r["Outcome"] == "Not Canceled")
-            final_outcome = "Not Canceled" if not_canceled > len(valid_results) / 2 else "Canceled"
-            css_class = "result-box" if final_outcome == "Not Canceled" else "result-box canceled"
-            icon = "✅" if final_outcome == "Not Canceled" else "❌"
-
-            st.markdown(f"""
-            <div class="{css_class}">
-                <div class="result-icon">{icon}</div>
-                <div class="result-text">Predicted: {final_outcome}</div>
-                <div>Ensemble Agreement: {max(not_canceled, len(valid_results)-not_canceled)} / {len(valid_results)} Models</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Plotly Bar Chart
+            valid = [r for r in results if r["Outcome"] in ("Not Canceled", "Canceled")]
+            nc = sum(1 for r in valid if r["Outcome"] == "Not Canceled")
+            final = "Not Canceled" if nc > len(valid)/2 else "Canceled"
+            css = "result-box" if final == "Not Canceled" else "result-box canceled"
+            icon = "✅" if final == "Not Canceled" else "❌"
+            st.markdown(f"""<div class="{css}"><div class="result-icon">{icon}</div><div class="result-text">Predicted: {final}</div><div>Agreement: {max(nc, len(valid)-nc)} / {len(valid)} Models</div></div>""", unsafe_allow_html=True)
             df_res = pd.DataFrame(results).sort_values("Prob", ascending=True)
-            fig = px.bar(df_res, x="Prob", y="Model", orientation='h', color="Outcome", 
-                         color_discrete_map={"Not Canceled": "#38ef7d", "Canceled": "#ef473a"},
-                         title="Model Confidence (Probability of Not Canceled)")
-            fig.update_layout(xaxis_title="Confidence Probability", yaxis_title="")
+            fig = px.bar(df_res, x="Prob", y="Model", orientation='h', color="Outcome", color_discrete_map={"Not Canceled": "#38ef7d", "Canceled": "#ef473a"}, title="Model Confidence")
+            fig.update_layout(xaxis_title="Probability", yaxis_title="")
             st.plotly_chart(fig, use_container_width=True)
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
@@ -373,152 +235,64 @@ if page == "🏠 Prediction Studio":
 # ============================================================
 elif page == "📊 Model Comparison":
     st.markdown("<div class='main-header'><h1>Model Evaluation Metrics</h1></div>", unsafe_allow_html=True)
-    
-    df_metrics = pd.DataFrame(all_metrics).T.reset_index().rename(columns={"index": "Model"})
-    df_metrics = df_metrics.sort_values("test_accuracy", ascending=False)
-    
+    df_metrics = pd.DataFrame(all_metrics).T.reset_index().rename(columns={"index": "Model"}).sort_values("test_accuracy", ascending=False)
     col1, col2 = st.columns(2)
     with col1:
-        fig1 = px.bar(df_metrics, x="Model", y=["train_accuracy", "test_accuracy"], barmode="group",
-                      title="Train vs Test Accuracy", color_discrete_sequence=["#667eea", "#38ef7d"])
+        fig1 = px.bar(df_metrics, x="Model", y=["train_accuracy", "test_accuracy"], barmode="group", title="Train vs Test Accuracy", color_discrete_sequence=["#667eea", "#38ef7d"])
         fig1.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig1, use_container_width=True)
-        
     with col2:
-        fig2 = px.bar(df_metrics, x="test_time_sec", y="Model", orientation='h',
-                      title="Inference Time (seconds)", color="test_time_sec", color_continuous_scale="Purp")
+        fig2 = px.bar(df_metrics, x="test_time_sec", y="Model", orientation='h', title="Inference Time (s)", color="test_time_sec", color_continuous_scale="Purp")
         st.plotly_chart(fig2, use_container_width=True)
-
     st.markdown("### Advanced Metrics Radar")
-    categories = ['test_accuracy', 'test_precision', 'test_recall', 'test_f1']
-    available_cats = [c for c in categories if c in df_metrics.columns]
-
-    if available_cats:
-        fig_radar = go.Figure()
+    cats = [c for c in ['test_accuracy', 'test_precision', 'test_recall', 'test_f1'] if c in df_metrics.columns]
+    if cats:
+        fig_r = go.Figure()
         for _, row in df_metrics.head(4).iterrows():
-            fig_radar.add_trace(go.Scatterpolar(
-                r=[row[c] for c in available_cats],
-                theta=[c.replace("test_", "").title() for c in available_cats],
-                fill='toself', name=row["Model"]
-            ))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=True)
-        st.plotly_chart(fig_radar, use_container_width=True)
-    
+            fig_r.add_trace(go.Scatterpolar(r=[row[c] for c in cats], theta=[c.replace("test_", "").title() for c in cats], fill='toself', name=row["Model"]))
+        fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=True)
+        st.plotly_chart(fig_r, use_container_width=True)
     styled = df_metrics.style.format(precision=4)
-    if "test_accuracy" in df_metrics.columns:
-        styled = styled.background_gradient(cmap='viridis', subset=['test_accuracy'])
-    if "test_f1" in df_metrics.columns:
-        styled = styled.background_gradient(cmap='viridis', subset=['test_f1'])
+    if "test_accuracy" in df_metrics.columns: styled = styled.background_gradient(cmap='viridis', subset=['test_accuracy'])
+    if "test_f1" in df_metrics.columns: styled = styled.background_gradient(cmap='viridis', subset=['test_f1'])
     st.dataframe(styled, use_container_width=True)
 
 # ============================================================
 # PAGE 3: SHAP EXPLAINER
 # ============================================================
 elif page == "🔍 SHAP Explainer":
-    st.markdown("<div class='main-header'><h1>Feature Importance (SHAP)</h1><p>Explainable AI for Random Forest Predictions</p></div>", unsafe_allow_html=True)
-    
+    st.markdown("""<div class="main-header"><h1>Feature Importance (SHAP)</h1><p>Explainable AI for Random Forest Predictions</p></div>""", unsafe_allow_html=True)
     try:
         shap_data = load_shap_data()
-        shap_values = shap_data["shap_values"]
-        sample_X = shap_data["sample_X"]
-        
-        st.info("SHAP values explain how much each feature contributed to the model's prediction. Positive values push the prediction towards 'Not Canceled', while negative values push it towards 'Canceled'.")
-        
-        # Handle SHAP output formats
-        if isinstance(shap_values, list) and len(shap_values) == 2:
-            mean_abs_shap = np.abs(shap_values[1]).mean(axis=0)
-        else:
-            mean_abs_shap = np.abs(np.array(shap_values)).mean(axis=0)
-
-        feature_imp = pd.DataFrame({"Feature": sample_X.columns, "Importance": mean_abs_shap}).sort_values("Importance", ascending=False).head(15)
-        
-        fig = px.bar(feature_imp, x="Importance", y="Feature", orientation='h', color="Importance",
-                     color_continuous_scale="Viridis", title="Global Feature Importance (Top 15)")
-        fig.update_layout(yaxis={'categoryorder':'total ascending'})
+        sv = shap_data["shap_values"]; sX = shap_data["sample_X"]
+        st.info("SHAP values explain how much each feature contributed to the model's prediction.")
+        if isinstance(sv, list) and len(sv) == 2: mas = np.abs(sv[1]).mean(0)
+        elif isinstance(sv, np.ndarray):
+            mas = np.abs(sv[:, :, 1]).mean(0) if sv.ndim == 3 else np.abs(sv).mean(0)
+        else: mas = np.abs(np.array(sv)).mean(0)
+        fi = pd.DataFrame({"Feature": sX.columns, "Importance": mas}).sort_values("Importance", ascending=False).head(15)
+        fig = px.bar(fi, x="Importance", y="Feature", orientation='h', color="Importance", color_continuous_scale="Viridis", title="Global Feature Importance (Top 15)")
+        fig.update_layout(yaxis={'categoryorder': 'total ascending'})
         st.plotly_chart(fig, use_container_width=True)
-        
+        st.dataframe(fi.reset_index(drop=True).style.format({"Importance": "%.4f"}), use_container_width=True)
     except FileNotFoundError:
-        st.warning("SHAP data file not found. Please run the training pipeline first.")
+        st.warning("SHAP data file (`shap_data.pkl`) not found. Run the training pipeline first.")
     except Exception as e:
-        st.error(f"Error loading SHAP data: {e}")
+        st.error(f"Error: {e}")
 
 # ============================================================
 # PAGE 4: GUEST SEGMENTS
 # ============================================================
 elif page == "👥 Guest Segments":
-    st.markdown("<div class='main-header'><h1>Guest Segmentation Analysis</h1><p>K-Means Clustering Profiles</p></div>", unsafe_allow_html=True)
-    
-    st.info("The K-Means model divided guests into distinct behavioral clusters. Below are the characteristics of each segment based on the training data analysis.")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        <div class="model-card">
-            <div class="card-content">
-                <h3>💎 Premium Segment (Cluster 0)</h3>
-                <ul>
-                    <li>Higher average room rate ($150+)</li>
-                    <li>Longer lead times (Advance planning)</li>
-                    <li>Higher rate of special requests</li>
-                    <li>More likely to select premium meal plans</li>
-                    <li><b>Lower Cancellation Risk</b></li>
-                </ul>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown("""
-        <div class="model-card">
-            <div class="card-content">
-                <h3>🏃 Budget / Transient Segment (Cluster 1)</h3>
-                <ul>
-                    <li>Lower average room rate (<$100)</li>
-                    <li>Shorter lead times (Spontaneous bookings)</li>
-                    <li>Fewer special requests</li>
-                    <li>Often book via online channels</li>
-                    <li><b>Higher Cancellation Risk</b></li>
-                </ul>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    col3, col4 = st.columns(2)
-    with col3:
-        st.markdown("""
-        <div class="model-card">
-            <div class="card-content">
-                <h3>🏢 Corporate Segment (Cluster 2)</h3>
-                <ul>
-                    <li>Booked through corporate channels</li>
-                    <li>Moderate room rates ($100-$150)</li>
-                    <li>Weekday arrivals (Mon-Wed)</li>
-                    <li>Short stays (1-3 nights)</li>
-                    <li><b>Very Low Cancellation Risk</b></li>
-                </ul>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col4:
-        st.markdown("""
-        <div class="model-card">
-            <div class="card-content">
-                <h3>✈️ Aviation / Special Segment (Cluster 3)</h3>
-                <ul>
-                    <li>Booked via aviation channel</li>
-                    <li>Very short or day-use stays</li>
-                    <li>Minimal special requests</li>
-                    <li>Complementary meal plans</li>
-                    <li><b>Low Cancellation Risk</b></li>
-                </ul>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("""
-    ### 💡 Business Recommendations
-    - **Premium Segment**: Offer loyalty rewards and upsell services to maintain low cancellation.
-    - **Budget Segment**: Implement deposit requirements or flexible rebooking to reduce no-shows.
-    - **Corporate Segment**: Secure long-term contracts for steady revenue.
-    - **Aviation Segment**: Partner with airlines for bundled deals to increase volume.
-    """)
+    st.markdown("""<div class="main-header"><h1>Guest Segmentation Analysis</h1><p>K-Means Clustering Profiles</p></div>""", unsafe_allow_html=True)
+    st.info("The K-Means model divided guests into distinct behavioral clusters.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("""<div class="model-card"><div class="card-content"><h3>💎 Premium Segment</h3><ul><li>Higher room rate ($150+)</li><li>Longer lead times</li><li>More special requests</li><li><b>Lower Cancellation Risk</b></li></ul></div></div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""<div class="model-card"><div class="card-content"><h3>🏃 Budget / Transient</h3><ul><li>Lower room rate (&lt;$100)</li><li>Shorter lead times</li><li>Fewer requests</li><li><b>Higher Cancellation Risk</b></li></ul></div></div>""", unsafe_allow_html=True)
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("""<div class="model-card"><div class="card-content"><h3>🏢 Corporate</h3><ul><li>Corporate channels</li><li>Moderate rates</li><li>Weekday arrivals</li><li><b>Very Low Cancellation</b></li></ul></div></div>""", unsafe_allow_html=True)
+    with c4:
+        st.markdown("""<div class="model-card"><div class="card-content"><h3>✈️ Aviation / Special</h3><ul><li>Aviation channel</li><li>Day-use stays</li><li>Minimal requests</li><li><b>Low Cancellation</b></li></ul></div></div>""", unsafe_allow_html=True)
