@@ -167,7 +167,7 @@ def evaluate_with_cv(model_instance, model_name, train_X, train_y, test_X, test_
     
     t0 = time.time()
     if is_keras:
-        model_instance.fit(train_X, train_y, epochs=30, batch_size=64, validation_split=0.1, verbose=0,
+        model_instance.fit(train_X, train_y, epochs=30, batch_size=64, validation_split=0.1, verbose=1,
                            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)])
     else:
         model_instance.fit(train_X, train_y)
